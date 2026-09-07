@@ -1,6 +1,6 @@
 # Advanced-Quantum-Mechanics-10112
 Teaching materials for DTU course 10112
 
-## Self-energy
+## Self-energy for tight-binding chains
 
 [Open in Molab](...)
