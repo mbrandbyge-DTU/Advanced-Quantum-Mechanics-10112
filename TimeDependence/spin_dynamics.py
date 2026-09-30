@@ -9,7 +9,7 @@ __generated_with = "0.25.0"
 app = marimo.App(width="full")
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
     import marimo as mo
     import numpy as np
@@ -22,22 +22,21 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # Spin-1/2: precession and resonance
+    # Spin-1/2 dynamics
     **DTU 10112 · Time-dependent phenomena · Ballentine, pp. 332–349**
 
-    Choose an initial state and a Hamiltonian, then press **Play** below the plot.
-    **Pause** and drag the time slider to examine any instant; **Reset** returns to $t=0$.
-    Changing a model control prepares a new experiment at $t=0$.
+    The two experiments below each keep **controls, plots, and playback together**.
+    The short physics cells are visible. Interface and drawing cells are collapsed
+    by default; open them only if you want to change the presentation.
 
-    We use your lecture's sign convention, $\omega_i=\gamma B_i$, and set $\hbar=1$:
-    $$H(t)=-\frac12[\omega_0\sigma_z+
-    \omega_1\cos(\omega t)\sigma_x+\omega_1\sin(\omega t)\sigma_y].$$
-    The rotating field is **circularly polarized**, so the rotating-frame solution is exact:
-    $$R(t)=e^{-i\omega t\sigma_z/2},\qquad
-    H_{\rm eff}=-\frac12[(\omega_0+\omega)\sigma_z+\omega_1\sigma_x],\qquad
-    |\psi(t)\rangle=R(t)e^{-iH_{\rm eff}t}|\psi(0)\rangle.$$
-    Resonance is $\omega=-\omega_0$ in this convention. Frequencies are angular
-    frequencies in one arbitrary inverse-time unit; no relaxation or ensemble averaging is included.
+    We use the slides' sign convention, $\omega_i=\gamma B_i$, and $\hbar=1$:
+    $$H(t)=-\frac12[\omega_0\sigma_z+\omega_1\cos(\omega t)\sigma_x
+    +\omega_1\sin(\omega t)\sigma_y].$$
+    For the circular drive the exact rotating-frame solution is
+    $$H_{\rm eff}=-\tfrac12[(\omega_0+\omega)\sigma_z+\omega_1\sigma_x],
+    \qquad |\psi(t)\rangle=e^{-i\omega t\sigma_z/2}e^{-iH_{\rm eff}t}|\psi(0)\rangle.$$
+    Resonance is $\omega=-\omega_0$. Frequencies are angular frequencies in arbitrary
+    inverse-time units; this pure-state model includes no relaxation.
     """)
     return
 
@@ -45,226 +44,310 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 1. Physics — the cells to inspect and change
+    ## Physics — small NumPy routines
     """)
     return
 
 
 @app.cell
 def _(np):
-    # PHYSICS ONLY: no plotting or widgets.
+    # Basis: |+z>, |-z>. All angles in radians.
     sx = np.array([[0, 1], [1, 0]], dtype=complex)
     sy = np.array([[0, -1j], [1j, 0]], dtype=complex)
-    sz = np.diag([1, -1]).astype(complex)
+    sz = np.array([[1, 0], [0, -1]], dtype=complex)
+
+    # Add new student presets here, without changing any plotting code.
+    spin_presets = {
+        "+z": (0, 0),
+        "-z": (np.pi, 0),
+        "+x": (np.pi/2, 0),
+        "+y": (np.pi/2, np.pi/2),
+    }
 
     def initial_spin(theta, phi):
-        """Angles in radians; basis is |+z>, |-z>."""
         return np.array([np.cos(theta/2), np.exp(1j*phi)*np.sin(theta/2)])
 
+    return initial_spin, spin_presets, sx, sy, sz
+
+
+@app.cell
+def _(np, sx, sz):
     def evolve_spin(psi0, times, omega0, omega1, omega):
-        """Exact solution for a static z field plus a circular rotating field."""
-        H_eff = -0.5 * ((omega0 + omega) * sz + omega1 * sx)
-        energies, vectors = np.linalg.eigh(H_eff)
-        coefficients = vectors.conj().T @ psi0
-        # One row per time; columns are spin components.
-        psi_rot = (np.exp(-1j*np.outer(times, energies)) * coefficients) @ vectors.T
-        rotation = np.column_stack([np.exp(-0.5j*omega*times),
-                                    np.exp(+0.5j*omega*times)])
-        psi_lab = rotation * psi_rot
+        """Exact circular-drive solution; static precession: omega1 = omega = 0."""
+        H_eff = -0.5 * ((omega0 + omega)*sz + omega1*sx)
+        energies, eigenvectors = np.linalg.eigh(H_eff)
+        coefficients = eigenvectors.conj().T @ psi0
+
+        # For each time: evolve eigenstate coefficients, then rotate back.
+        psi_rot = np.zeros((len(times), 2), dtype=complex)
+        psi_lab = np.zeros((len(times), 2), dtype=complex)
+        for i, t in enumerate(times):
+            phases = np.exp(-1j*energies*t)
+            psi_rot[i] = eigenvectors @ (phases*coefficients)
+            R = np.diag([np.exp(-1j*omega*t/2), np.exp(+1j*omega*t/2)])
+            psi_lab[i] = R @ psi_rot[i]
         return psi_lab, psi_rot
 
-    def bloch_vector(states):
-        """r = <sigma>; <S> = hbar*r/2, and pure states have |r|=1."""
-        return np.column_stack([
-            np.einsum('ti,ij,tj->t', states.conj(), sigma, states).real
-            for sigma in (sx, sy, sz)])
+    return (evolve_spin,)
 
-    return bloch_vector, evolve_spin, initial_spin
+
+@app.cell
+def _(np, sx, sy, sz):
+    def bloch_vector(states):
+        """r = <sigma>; the spin expectation is r/2 when hbar = 1."""
+        r = np.zeros((len(states), 3))
+        for i, psi in enumerate(states):
+            r[i, 0] = (psi.conj() @ sx @ psi).real
+            r[i, 1] = (psi.conj() @ sy @ psi).real
+            r[i, 2] = (psi.conj() @ sz @ psi).real
+        return r
+
+    return (bloch_vector,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 2. Controls — prepare an experiment
+    ## Interface and drawing — optional code
+
+    The following code cells are collapsed. The complete experiments appear below them.
     """)
     return
 
 
-@app.cell
-def _(mo):
-    mode = mo.ui.dropdown(["Static field (precession)", "Rotating field (resonance)"],
-                          value="Static field (precession)", label="Experiment")
-    initial = mo.ui.dropdown(["+z", "-z", "+x", "+y", "Custom angles"],
-                             value="+x", label="Initial spin")
-    theta = mo.ui.slider(0, 180, step=5, value=60, label="Custom theta (degrees)", show_value=True)
-    phi = mo.ui.slider(-180, 180, step=5, value=0, label="Custom phi (degrees)", show_value=True)
-    omega0 = mo.ui.slider(-2, 2, step=0.1, value=1, label="omega_0", show_value=True)
-    omega1 = mo.ui.slider(0, 1, step=0.05, value=0.3, label="omega_1 (rotating field)", show_value=True)
-    omega = mo.ui.slider(-3, 3, step=0.1, value=-1, label="omega (signed drive frequency)", show_value=True)
-    frame = mo.ui.dropdown(["Laboratory", "Rotating"], value="Laboratory", label="Bloch-sphere frame")
-    end_time = mo.ui.slider(5, 60, step=5, value=25, label="Final time", show_value=True)
-    mo.vstack([mo.hstack([mode, initial, frame], wrap=True),
-               mo.hstack([theta, phi], wrap=True),
-               mo.hstack([omega0, omega1, omega], wrap=True), end_time,
-               mo.md("Custom angles apply only to **Custom angles**. Static mode ignores omega_1 and omega; its two frame views coincide.")])
-    return end_time, frame, initial, mode, omega, omega0, omega1, phi, theta
+@app.cell(hide_code=True)
+def _(mo, spin_presets):
+    # INTERFACE ONLY. Make widgets here, but display them together with the figure.
+    def make_controls(rotating):
+        controls = {
+            "initial": mo.ui.dropdown(list(spin_presets) + ["Custom angles"],
+                                      value="+z" if rotating else "+x", label="Initial spin"),
+            "theta": mo.ui.slider(0, 180, step=5, value=60, label="Custom θ (degrees)", show_value=True),
+            "phi": mo.ui.slider(-180, 180, step=5, value=0, label="Custom φ (degrees)", show_value=True),
+            "omega0": mo.ui.slider(-2, 2, step=0.1, value=1, label="ω₀", show_value=True),
+            "end": mo.ui.slider(5, 60, step=5, value=25, label="Final time", show_value=True),
+        }
+        if rotating:
+            controls.update({
+                "omega1": mo.ui.slider(0, 1, step=0.05, value=0.3, label="ω₁ (drive strength)", show_value=True),
+                "omega": mo.ui.slider(-3, 3, step=0.1, value=-1, label="ω (signed drive frequency)", show_value=True),
+                "frame": mo.ui.dropdown(["Laboratory", "Rotating"], value="Laboratory", label="View frame"),
+            })
+        return controls
+
+    return (make_controls,)
 
 
-@app.cell
+@app.cell(hide_code=True)
+def _(go, make_subplots, np):
+    # DRAWING ONLY: a solid tube and cone, with the arrow tip exactly at the vector.
+    def arrow3d(vector, color, name):
+        vector = np.asarray(vector, dtype=float)
+        length = np.linalg.norm(vector)
+        if length < 1e-12:
+            return go.Mesh3d(x=[], y=[], z=[], i=[], j=[], k=[], color=color,
+                             name=name, showlegend=True, hoverinfo="skip")
+        direction = vector/length
+        reference = np.array([0., 0., 1.]) if abs(direction[2]) < 0.9 else np.array([0., 1., 0.])
+        e1 = np.cross(direction, reference)
+        e1 = e1/np.linalg.norm(e1)
+        e2 = np.cross(direction, e1)
+        n = 20
+        angles = np.linspace(0, 2*np.pi, n, endpoint=False)
+        circle = np.cos(angles)[:, None]*e1 + np.sin(angles)[:, None]*e2
+        head_length = min(0.20, 0.25*length)
+        neck = vector - head_length*direction
+        vertices = np.vstack([0.020*circle, neck+0.020*circle,
+                              neck+0.075*circle, vector, [0., 0., 0.], neck])
+        faces = []
+        tip, base, centre = 3*n, 3*n+1, 3*n+2
+        for j in range(n):
+            k = (j+1) % n
+            faces.extend([(j, k, n+j), (k, n+k, n+j),       # tube
+                          (base, k, j),                    # tube bottom
+                          (n+j, n+k, 2*n+j), (n+k, 2*n+k, 2*n+j),
+                          (2*n+j, 2*n+k, tip),             # cone
+                          (centre, 2*n+k, 2*n+j)])         # cone bottom
+        faces = np.array(faces)
+        return go.Mesh3d(x=vertices[:, 0], y=vertices[:, 1], z=vertices[:, 2],
+                         i=faces[:, 0], j=faces[:, 1], k=faces[:, 2], color=color,
+                         name=name, showlegend=True, hoverinfo="skip", flatshading=False,
+                         lighting=dict(ambient=0.45, diffuse=0.8, specular=0.4, roughness=0.35),
+                         lightposition=dict(x=100, y=100, z=200))
+
+    def spin_figure(times, r, frequency_axis, p_down, p_x, view):
+        fig = make_subplots(rows=1, cols=2, specs=[[{"type": "scene"}, {"type": "xy"}]],
+                            column_widths=[0.53, 0.47], horizontal_spacing=0.07,
+                            subplot_titles=(f"Bloch sphere · {view.lower()}", "Measurement probabilities"))
+        a = np.linspace(0, 2*np.pi, 70)
+        b = np.linspace(0, np.pi, 35)
+        sphere = go.Surface(x=np.outer(np.cos(a), np.sin(b)), y=np.outer(np.sin(a), np.sin(b)),
+                            z=np.outer(np.ones_like(a), np.cos(b)), opacity=0.12,
+                            colorscale=[[0, "#a8c4dc"], [1, "#a8c4dc"]], showscale=False,
+                            hoverinfo="skip", name="Sphere")
+        fig.add_trace(sphere, row=1, col=1)
+        for xyz in [(np.cos(a), np.sin(a), np.zeros_like(a)),
+                    (np.cos(a), np.zeros_like(a), np.sin(a)),
+                    (np.zeros_like(a), np.cos(a), np.sin(a))]:
+            fig.add_trace(go.Scatter3d(x=xyz[0], y=xyz[1], z=xyz[2], mode="lines",
+                          line=dict(color="#a5b3bf", width=2), showlegend=False, hoverinfo="skip"), row=1, col=1)
+        for axis, label in zip(np.eye(3), ["x", "y", "z"]):
+            endpoints = np.array([-1.15*axis, 1.18*axis])
+            fig.add_trace(go.Scatter3d(x=endpoints[:, 0], y=endpoints[:, 1], z=endpoints[:, 2],
+                          mode="lines+text", text=["", label], textposition="top center",
+                          line=dict(color="#555555", width=2), showlegend=False, hoverinfo="skip"), row=1, col=1)
+
+        def traces(i):
+            return [
+                go.Scatter3d(x=r[:i+1, 0], y=r[:i+1, 1], z=r[:i+1, 2], mode="lines",
+                             line=dict(color="#4a7ac0", width=4), showlegend=False, hoverinfo="skip"),
+                arrow3d(r[i], "#235ba8", "Spin ⟨σ⟩"),
+                arrow3d(frequency_axis[i], "#dd8b22", "Frequency axis"),
+                go.Scatter(x=[times[i], times[i]], y=[p_down[i], p_x[i]], mode="markers",
+                           marker=dict(size=9, color=["#235ba8", "#b04d86"]), showlegend=False),
+            ]
+        dynamic = [len(fig.data), len(fig.data)+1, len(fig.data)+2]
+        for trace in traces(0)[:3]:
+            fig.add_trace(trace, row=1, col=1)
+        fig.add_trace(go.Scatter(x=times, y=p_down, name="P(−z)",
+                                 line=dict(color="#235ba8", width=2.5)), row=1, col=2)
+        fig.add_trace(go.Scatter(x=times, y=p_x, name="P(+x), lab",
+                                 line=dict(color="#b04d86", width=2, dash="dot")), row=1, col=2)
+        dynamic.append(len(fig.data))
+        fig.add_trace(traces(0)[3], row=1, col=2)
+        fig.frames = [go.Frame(name=str(i), data=traces(i), traces=dynamic) for i in range(len(times))]
+        axis_style = dict(visible=False, range=[-1.3, 1.3])
+        fig.update_layout(scene=dict(xaxis=axis_style, yaxis=axis_style, zaxis=axis_style,
+                                    aspectmode="cube", bgcolor="white",
+                                    camera=dict(eye=dict(x=0.90, y=0.90, z=0.65))))
+        fig.update_xaxes(title="Time t", range=[0, times[-1]], showgrid=True, gridcolor="#edf0f3")
+        fig.update_yaxes(title="Probability", range=[-0.03, 1.03], tickvals=[0, 0.5, 1], gridcolor="#edf0f3")
+
+        def animation_options(duration):
+            return dict(mode="immediate", fromcurrent=True,
+                        frame=dict(duration=duration, redraw=True), transition=dict(duration=0))
+        fig.update_layout(template="plotly_white", height=510,
+            font=dict(family="Georgia, serif", size=13, color="#243247"),
+            margin=dict(l=45, r=15, t=65, b=110),
+            legend=dict(orientation="h", x=0, y=1.14, font=dict(size=12)),
+            updatemenus=[dict(type="buttons", direction="left", x=0, y=-0.18,
+                buttons=[dict(label="▶ Play", method="animate", args=[None, animation_options(65)]),
+                         dict(label="Pause", method="animate", args=[[None], animation_options(0)]),
+                         dict(label="Reset", method="animate", args=[["0"], animation_options(0)])])],
+            sliders=[dict(active=0, x=0, y=-0.04, len=1, ticklen=0, font=dict(size=10),
+                currentvalue=dict(prefix="t = ", font=dict(size=13)),
+                steps=[dict(label=f"{t:.2f}", method="animate", args=[[str(i)], animation_options(0)])
+                       for i, t in enumerate(times)])])
+        return fig
+
+    return (spin_figure,)
+
+
+@app.cell(hide_code=True)
 def _(
     bloch_vector,
-    end_time,
     evolve_spin,
-    frame,
-    initial,
     initial_spin,
-    mode,
-    np,
-    omega,
-    omega0,
-    omega1,
-    phi,
-    theta,
-):
-    # CONNECT CONTROLS TO PHYSICS; visualization is in the next cell.
-    _angles = {"+z": (0, 0), "-z": (np.pi, 0), "+x": (np.pi/2, 0), "+y": (np.pi/2, np.pi/2)}
-    _theta, _phi = _angles.get(initial.value, (np.deg2rad(theta.value), np.deg2rad(phi.value)))
-    spin0 = initial_spin(_theta, _phi)
-    spin_times = np.linspace(0, end_time.value, 301)
-    w0 = omega0.value
-    w1 = omega1.value if mode.value == "Rotating field (resonance)" else 0.0
-    w = omega.value if mode.value == "Rotating field (resonance)" else 0.0
-    lab_states, rotating_states = evolve_spin(spin0, spin_times, w0, w1, w)
-    spin_bloch = bloch_vector(lab_states if frame.value == "Laboratory" else rotating_states)
-    p_down = np.abs(lab_states[:, 1])**2
-    if frame.value == "Laboratory":
-        frequency_vectors = np.column_stack([w1*np.cos(w*spin_times), w1*np.sin(w*spin_times),
-                                            np.full_like(spin_times, w0)])
-    else:
-        frequency_vectors = np.tile([w1, 0, w0+w], (len(spin_times), 1))
-    # Normalize arrows for display only; retain physical magnitudes in w0, w1, w.
-    _frequency_norm = np.linalg.norm(frequency_vectors, axis=1, keepdims=True)
-    frequency_vectors = np.divide(frequency_vectors, _frequency_norm,
-                                  out=np.zeros_like(frequency_vectors), where=_frequency_norm>0)
-    return (
-        frequency_vectors,
-        lab_states,
-        p_down,
-        spin_bloch,
-        spin_times,
-        w,
-        w0,
-        w1,
-    )
-
-
-@app.function
-# VISUALIZATION ONLY: shared pattern, copied so each notebook is one file.
-def add_playback(fig, times, frame_ms=70):
-    def options(duration):
-        return dict(mode="immediate", fromcurrent=True,
-                    frame=dict(duration=duration, redraw=True),
-                    transition=dict(duration=0))
-    fig.update_layout(
-        template="plotly_white", height=620,
-        margin=dict(l=55, r=30, t=70, b=150),
-        legend=dict(orientation="h", y=1.10, x=0),
-        updatemenus=[dict(type="buttons", direction="left", x=0, y=-0.15,
-            buttons=[
-                dict(label="▶ Play", method="animate", args=[None, options(frame_ms)]),
-                dict(label="Pause", method="animate", args=[[None], options(0)]),
-                dict(label="Reset", method="animate", args=[["0"], options(0)])])],
-        sliders=[dict(active=0, x=0, y=-0.04, len=1,
-            currentvalue=dict(prefix="Time t = "),
-            steps=[dict(label=f"{t:.2f}", method="animate", args=[[str(i)], options(0)])
-                   for i, t in enumerate(times)])])
-    return fig
-
-
-@app.cell
-def _(
-    frame,
-    frequency_vectors,
-    go,
-    make_subplots,
     mo,
     np,
-    p_down,
-    spin_bloch,
-    spin_times,
+    spin_figure,
+    spin_presets,
 ):
-    # VISUALIZATION ONLY: build a sphere and update selected traces per frame.
-    spin_fig = make_subplots(rows=1, cols=2, specs=[[{"type": "scene"}, {"type": "xy"}]],
-                            subplot_titles=(f"Bloch sphere — {frame.value.lower()} frame", "Probability to measure -z"))
-    # Three great circles give a light, transparent sphere.
-    _a = np.linspace(0, 2*np.pi, 100)
-    for _xyz in [(np.cos(_a), np.sin(_a), np.zeros_like(_a)),
-                 (np.cos(_a), np.zeros_like(_a), np.sin(_a)),
-                 (np.zeros_like(_a), np.cos(_a), np.sin(_a))]:
-        spin_fig.add_trace(go.Scatter3d(x=_xyz[0], y=_xyz[1], z=_xyz[2], mode="lines",
-            line=dict(color="#cccccc", width=2), showlegend=False, hoverinfo="skip"), row=1, col=1)
+    # INTERFACE ADAPTER: read controls, call the physics, assemble ONE output.
+    def simulation_panel(controls, rotating):
+        initial = controls["initial"].value
+        if initial == "Custom angles":
+            theta = np.deg2rad(controls["theta"].value)
+            phi = np.deg2rad(controls["phi"].value)
+        else:
+            theta, phi = spin_presets[initial]
+        psi0 = initial_spin(theta, phi)
+        times = np.linspace(0, controls["end"].value, 201)
+        w0 = controls["omega0"].value
+        w1 = controls["omega1"].value if rotating else 0.0
+        w = controls["omega"].value if rotating else 0.0
+        view = controls["frame"].value if rotating else "Laboratory"
+        lab, rot = evolve_spin(psi0, times, w0, w1, w)
+        r_lab = bloch_vector(lab)
+        r = bloch_vector(rot) if view == "Rotating" else r_lab
+        p_down = np.abs(lab[:, 1])**2
+        p_x = (1+r_lab[:, 0])/2
+        frequency_axis = np.zeros((len(times), 3))
+        for i, t in enumerate(times):
+            v = np.array([w1, 0, w0+w]) if view == "Rotating" else np.array([w1*np.cos(w*t), w1*np.sin(w*t), w0])
+            if np.linalg.norm(v) > 0:
+                frequency_axis[i] = v/np.linalg.norm(v)
+        fig = spin_figure(times, r, frequency_axis, p_down, p_x, view)
+        chart = mo.ui.plotly(fig, config={"displayModeBar": False, "responsive": True})
+        # No widget has a separate output cell; controls sit inside this card.
+        widgets = [controls["initial"], controls["omega0"]]
+        if rotating:
+            widgets += [controls["omega1"], controls["omega"], controls["frame"]]
+        widgets += [controls["end"], mo.accordion({"Custom initial angles":
+                   mo.vstack([controls["theta"], controls["phi"],
+                              mo.md("Used only with **Custom angles**.")])})]
+        sidebar = mo.vstack(widgets, gap=0.6)
+        norm_error = max(abs(np.sum(abs(psi)**2)-1) for psi in lab)
+        details = f"Norm error: {norm_error:.1e}. "
+        if rotating:
+            details += f"Detuning ω₀+ω = {w0+w:.2f}; Rabi frequency = {np.sqrt((w0+w)**2+w1**2):.3f}. "
+            if w1 > 0:
+                details += f"On-resonance π-pulse time: {np.pi/w1:.3f}."
+        title = "2. Magnetic resonance" if rotating else "1. Precession in a static field"
+        hint = ("Start at +z; set ω = −ω₀ for full inversion. Switch to the rotating frame."
+                if rotating else "Compare +x and +z; watch P(+x) as well as the spin direction.")
+        panel = mo.vstack([
+            mo.md(f"### {title}\n{hint}"),
+            mo.hstack([sidebar, chart], widths=[1, 4], align="start", gap=1.0),
+            mo.md("**Play · Pause · Reset · time slider** below the plots. Changes restart at t = 0. "
+                  "Drag the sphere to rotate the view. The orange arrow is a unit frequency axis.\n\n"+details),
+        ], gap=0.7).style({"border":"1px solid #dce3eb", "border-radius":"12px", "padding":"18px", "margin-bottom":"20px"})
+        return panel, fig
 
-    def spin_frame_traces(i):
-        r = spin_bloch[i]
-        b = frequency_vectors[i]
-        return [
-            go.Scatter3d(x=spin_bloch[:i+1, 0], y=spin_bloch[:i+1, 1], z=spin_bloch[:i+1, 2],
-                         mode="lines", line=dict(color="#3182bd", width=3), name="Spin trajectory"),
-            go.Scatter3d(x=[0, r[0]], y=[0, r[1]], z=[0, r[2]], mode="lines+markers",
-                         line=dict(color="#08519c", width=6), marker=dict(size=[0, 5]), name="<sigma>"),
-            go.Scatter3d(x=[0, b[0]], y=[0, b[1]], z=[0, b[2]], mode="lines",
-                         line=dict(color="#238b45", width=5), name="Frequency axis (unit length)"),
-            go.Scatter(x=[spin_times[i]], y=[p_down[i]], mode="markers",
-                       marker=dict(color="#08519c", size=11), name="Current time", showlegend=False)]
+    return (simulation_panel,)
 
-    _dynamic_indices = [3, 4, 5, 7]
-    for _tr in spin_frame_traces(0)[:3]:
-        spin_fig.add_trace(_tr, row=1, col=1)
-    spin_fig.add_trace(go.Scatter(x=spin_times, y=p_down, mode="lines", name="P(-z)",
-                                 line=dict(color="#08519c")), row=1, col=2)
-    spin_fig.add_trace(spin_frame_traces(0)[3], row=1, col=2)
-    spin_fig.frames = [go.Frame(name=str(_i), data=spin_frame_traces(_i), traces=_dynamic_indices)
-                       for _i in range(len(spin_times))]
-    spin_fig.update_layout(scene=dict(
-        xaxis=dict(title="<sigma_x>", range=[-1.1, 1.1]),
-        yaxis=dict(title="<sigma_y>", range=[-1.1, 1.1]),
-        zaxis=dict(title="<sigma_z>", range=[-1.1, 1.1]), aspectmode="cube",
-        camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))))
-    spin_fig.update_xaxes(title="Time t", range=[0, spin_times[-1]], row=1, col=2)
-    spin_fig.update_yaxes(title="P(-z)", range=[-0.02, 1.02], row=1, col=2)
-    add_playback(spin_fig, spin_times)
-    mo.ui.plotly(spin_fig, config={"displayModeBar": False})
+
+@app.cell(hide_code=True)
+def _(make_controls):
+    precession_controls = make_controls(rotating=False)
+    return (precession_controls,)
+
+
+@app.cell(hide_code=True)
+def _(precession_controls, simulation_panel):
+    precession_panel, precession_fig = simulation_panel(precession_controls, rotating=False)
+    precession_panel
     return
 
 
-@app.cell
-def _(lab_states, mo, np, w, w0, w1):
-    _norm_error = np.max(np.abs(np.sum(np.abs(lab_states)**2, axis=1)-1))
-    _detuning = w0 + w
-    _rabi = np.hypot(_detuning, w1)
-    mo.md(f"**Numerical check:** maximum norm error = {_norm_error:.1e}. "
-          f"**Rotating-field parameters:** detuning = {_detuning:.2f}, "
-          f"generalized Rabi frequency = {_rabi:.3f}. "
-          + (f"On-resonance pi-pulse time = {np.pi/w1:.3f}." if w1 > 0 else "Transverse drive is off."))
+@app.cell(hide_code=True)
+def _(make_controls):
+    resonance_controls = make_controls(rotating=True)
+    return (resonance_controls,)
+
+
+@app.cell(hide_code=True)
+def _(resonance_controls, simulation_panel):
+    resonance_panel, resonance_fig = simulation_panel(resonance_controls, rotating=True)
+    resonance_panel
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 3. Predict → try → explain
+    ## Predict → try → explain
 
-    1. **Stationary state versus stationary spin direction.** In static mode compare
+    1. **Stationary state versus stationary spin direction.** In the precession panel compare
        $|+z\rangle$ and $|+x\rangle$. Predict which probabilities change and which do not.
        Does a constant Bloch vector imply the ket has no time dependence?
-    2. **Find resonance.** Select rotating field, initial $|+z\rangle$, $\omega_0=1$,
+    2. **Find resonance.** In the resonance panel, select initial $|+z\rangle$, $\omega_0=1$,
        $\omega_1=0.3$. Find the signed $\omega$ that gives a complete spin flip.
        Switch frames: why is one trajectory simpler? Predict the first flip time.
     3. **Detune.** Change $\omega$ by $0.3$. Predict whether oscillations become
        faster or slower, and whether their amplitude increases or decreases.
-    4. **Edit the physics.** Change the sign of `w0` through its slider and find resonance
-       again. Then add an `initial_spin` preset for $|-x\rangle$ in the
-       control-to-physics cell. Check its initial Bloch vector before playing.
+    4. **Edit the physics.** Change the sign of `omega_0` through its slider and find resonance
+       again. Then add a preset for $|-x\rangle$ in `spin_presets`. Check its initial Bloch vector before playing.
     5. **Extension (a different model).** Replace the circular field by a linearly
        polarized field, $H=-[\omega_0\sigma_z+\omega_1\cos(\omega t)\sigma_x]/2$.
        The constant `H_eff` used here no longer solves that problem exactly.
