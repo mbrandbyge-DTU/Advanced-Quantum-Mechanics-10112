@@ -133,7 +133,8 @@ def _(mo, spin_presets):
                 "omega": mo.ui.slider(-3, 3, step=0.1, value=-1, label="ω (signed drive frequency)", show_value=True),
                 "frame": mo.ui.dropdown(["Laboratory", "Rotating"], value="Laboratory", label="View frame"),
             })
-        return controls
+        # A reactive dictionary binds every child control to this UI element.
+        return mo.ui.dictionary(controls)
 
     return (make_controls,)
 
@@ -254,19 +255,19 @@ def _(
     spin_presets,
 ):
     # INTERFACE ADAPTER: read controls, call the physics, assemble ONE output.
-    def simulation_panel(controls, rotating):
-        initial = controls["initial"].value
+    def simulation_panel(controls, values, rotating):
+        initial = values["initial"]
         if initial == "Custom angles":
-            theta = np.deg2rad(controls["theta"].value)
-            phi = np.deg2rad(controls["phi"].value)
+            theta = np.deg2rad(values["theta"])
+            phi = np.deg2rad(values["phi"])
         else:
             theta, phi = spin_presets[initial]
         psi0 = initial_spin(theta, phi)
-        times = np.linspace(0, controls["end"].value, 201)
-        w0 = controls["omega0"].value
-        w1 = controls["omega1"].value if rotating else 0.0
-        w = controls["omega"].value if rotating else 0.0
-        view = controls["frame"].value if rotating else "Laboratory"
+        times = np.linspace(0, values["end"], 201)
+        w0 = values["omega0"]
+        w1 = values["omega1"] if rotating else 0.0
+        w = values["omega"] if rotating else 0.0
+        view = values["frame"] if rotating else "Laboratory"
         lab, rot = evolve_spin(psi0, times, w0, w1, w)
         r_lab = bloch_vector(lab)
         r = bloch_vector(rot) if view == "Rotating" else r_lab
@@ -315,7 +316,7 @@ def _(make_controls):
 
 @app.cell(hide_code=True)
 def _(precession_controls, simulation_panel):
-    precession_panel, precession_fig = simulation_panel(precession_controls, rotating=False)
+    precession_panel, precession_fig = simulation_panel(precession_controls, precession_controls.value, rotating=False)
     precession_panel
     return
 
@@ -328,7 +329,7 @@ def _(make_controls):
 
 @app.cell(hide_code=True)
 def _(resonance_controls, simulation_panel):
-    resonance_panel, resonance_fig = simulation_panel(resonance_controls, rotating=True)
+    resonance_panel, resonance_fig = simulation_panel(resonance_controls, resonance_controls.value, rotating=True)
     resonance_panel
     return
 
