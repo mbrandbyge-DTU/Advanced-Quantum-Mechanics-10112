@@ -154,8 +154,7 @@ def _(mo, spin_presets):
 def _(anywidget, traitlets):
     # DRAWING ONLY: a from-scratch three.js scene. Geometry is created once;
     # each frame only updates a handful of numbers (arrow orientation/length,
-    # trail draw range, 2D canvas redraw) instead of rebuilding mesh JSON like
-    # the Plotly version does, which is what makes this lighter at runtime.
+    # trail draw range, 2D canvas redraw) — lightweight at runtime.
     # three.js is dynamically imported inside render() (not as a static ES
     # import) so the "Loading 3D view…" placeholder actually appears on screen
     # immediately instead of the widget staying blank while the CDN fetch
