@@ -1,11 +1,11 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["marimo>=0.23.9", "numpy>=1.26", "plotly>=6.0"]
+# dependencies = ["marimo>=0.23.9", "numpy>=1.26", "anywidget>=0.9", "traitlets>=5.0"]
 # ///
 
 import marimo
 
-__generated_with = "0.25.0"
+__generated_with = "0.25.1"
 app = marimo.App(width="full")
 
 
@@ -13,50 +13,64 @@ app = marimo.App(width="full")
 def _():
     import marimo as mo
     import numpy as np
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
+    import anywidget
+    import traitlets
 
-    return go, make_subplots, mo, np
+    return anywidget, mo, np, traitlets
 
 
 @app.cell(hide_code=True)
 def _(mo):
+    # TODO before final release: do one more pass over the hidden cells below
+    # and strip any remaining internal/programming notes (library or CDN
+    # mentions, implementation rationale, etc.) so only physics- and
+    # teaching-facing comments remain anywhere in this notebook.
     mo.md(r"""
     # Spin-1/2 dynamics
-    **DTU 10112 · Time-dependent phenomena · Ballentine, pp. 332–349**
-
-    The two experiments below each keep **controls, plots, and playback together**.
-    The short physics cells are visible. Interface and drawing cells are collapsed
-    by default; open them only if you want to change the presentation.
-
-    We use the slides' sign convention, $\omega_i=\gamma B_i$, and $\hbar=1$:
-    $$H(t)=-\frac12[\omega_0\sigma_z+\omega_1\cos(\omega t)\sigma_x
-    +\omega_1\sin(\omega t)\sigma_y].$$
-    For the circular drive the exact rotating-frame solution is
-    $$H_{\rm eff}=-\tfrac12[(\omega_0+\omega)\sigma_z+\omega_1\sigma_x],
-    \qquad |\psi(t)\rangle=e^{-i\omega t\sigma_z/2}e^{-iH_{\rm eff}t}|\psi(0)\rangle.$$
-    Resonance is $\omega=-\omega_0$. Frequencies are angular frequencies in arbitrary
-    inverse-time units; this pure-state model includes no relaxation.
+    **DTU 10112 · Time-dependent phenomena · Ballentine, pp. 332–349** · $\hbar=1$,
+    $\omega_i=\gamma B_i$: $H(t)=-\frac12[\omega_0\sigma_z+\omega_1\cos(\omega t)\sigma_x+\omega_1\sin(\omega t)\sigma_y]$.
+    Try the two experiments below; the physics and full write-up follow underneath
+    them. Drag the sphere any time, including while playing, to look from any angle.
     """)
     return
 
 
 @app.cell(hide_code=True)
+def _(make_controls):
+    precession_controls = make_controls(rotating=False)
+    return (precession_controls,)
+
+
+@app.cell(hide_code=True, expand_output=True)
+def _(precession_controls, simulation_panel):
+    simulation_panel(precession_controls, precession_controls.value, rotating=False)
+    return
+
+
+@app.cell(hide_code=True)
+def _(make_controls):
+    resonance_controls = make_controls(rotating=True)
+    return (resonance_controls,)
+
+
+@app.cell(hide_code=True, expand_output=True)
+def _(resonance_controls, simulation_panel):
+    simulation_panel(resonance_controls, resonance_controls.value, rotating=True)
+    return
+
+
+@app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## Physics — small NumPy routines
-    """)
+    mo.md(r"""## Physics — small NumPy routines""")
     return
 
 
 @app.cell
 def _(np):
-    # Basis: |+z>, |-z>. All angles in radians.
     sx = np.array([[0, 1], [1, 0]], dtype=complex)
     sy = np.array([[0, -1j], [1j, 0]], dtype=complex)
     sz = np.array([[1, 0], [0, -1]], dtype=complex)
 
-    # Add new student presets here, without changing any plotting code.
     spin_presets = {
         "+z": (0, 0),
         "-z": (np.pi, 0),
@@ -78,7 +92,6 @@ def _(np, sx, sz):
         energies, eigenvectors = np.linalg.eigh(H_eff)
         coefficients = eigenvectors.conj().T @ psi0
 
-        # For each time: evolve eigenstate coefficients, then rotate back.
         psi_rot = np.zeros((len(times), 2), dtype=complex)
         psi_lab = np.zeros((len(times), 2), dtype=complex)
         for i, t in enumerate(times):
@@ -94,7 +107,6 @@ def _(np, sx, sz):
 @app.cell
 def _(np, sx, sy, sz):
     def bloch_vector(states):
-        """r = <sigma>; the spin expectation is r/2 when hbar = 1."""
         r = np.zeros((len(states), 3))
         for i, psi in enumerate(states):
             r[i, 0] = (psi.conj() @ sx @ psi).real
@@ -110,7 +122,7 @@ def _(mo):
     mo.md(r"""
     ## Interface and drawing — optional code
 
-    The following code cells are collapsed. The complete experiments appear below them.
+    The following code cells are collapsed. The complete experiments appear above.
     """)
     return
 
@@ -133,125 +145,288 @@ def _(mo, spin_presets):
                 "omega": mo.ui.slider(-3, 3, step=0.1, value=-1, label="ω (signed drive frequency)", show_value=True),
                 "frame": mo.ui.dropdown(["Laboratory", "Rotating"], value="Laboratory", label="View frame"),
             })
-        # A reactive dictionary binds every child control to this UI element.
         return mo.ui.dictionary(controls)
 
     return (make_controls,)
 
 
 @app.cell(hide_code=True)
-def _(go, make_subplots, np):
-    # DRAWING ONLY: a solid tube and cone, with the arrow tip exactly at the vector.
-    def arrow3d(vector, color, name):
-        vector = np.asarray(vector, dtype=float)
-        length = np.linalg.norm(vector)
-        if length < 1e-12:
-            return go.Mesh3d(x=[], y=[], z=[], i=[], j=[], k=[], color=color,
-                             name=name, showlegend=True, hoverinfo="skip")
-        direction = vector/length
-        reference = np.array([0., 0., 1.]) if abs(direction[2]) < 0.9 else np.array([0., 1., 0.])
-        e1 = np.cross(direction, reference)
-        e1 = e1/np.linalg.norm(e1)
-        e2 = np.cross(direction, e1)
-        n = 20
-        angles = np.linspace(0, 2*np.pi, n, endpoint=False)
-        circle = np.cos(angles)[:, None]*e1 + np.sin(angles)[:, None]*e2
-        head_length = min(0.20, 0.25*length)
-        neck = vector - head_length*direction
-        vertices = np.vstack([0.020*circle, neck+0.020*circle,
-                              neck+0.075*circle, vector, [0., 0., 0.], neck])
-        faces = []
-        tip, base, centre = 3*n, 3*n+1, 3*n+2
-        for j in range(n):
-            k = (j+1) % n
-            faces.extend([(j, k, n+j), (k, n+k, n+j),       # tube
-                          (base, k, j),                    # tube bottom
-                          (n+j, n+k, 2*n+j), (n+k, 2*n+k, 2*n+j),
-                          (2*n+j, 2*n+k, tip),             # cone
-                          (centre, 2*n+k, 2*n+j)])         # cone bottom
-        faces = np.array(faces)
-        return go.Mesh3d(x=vertices[:, 0], y=vertices[:, 1], z=vertices[:, 2],
-                         i=faces[:, 0], j=faces[:, 1], k=faces[:, 2], color=color,
-                         name=name, showlegend=True, hoverinfo="skip", flatshading=False,
-                         lighting=dict(ambient=0.45, diffuse=0.8, specular=0.4, roughness=0.35),
-                         lightposition=dict(x=100, y=100, z=200))
+def _(anywidget, traitlets):
+    # DRAWING ONLY: a from-scratch three.js scene. Geometry is created once;
+    # each frame only updates a handful of numbers (arrow orientation/length,
+    # trail draw range, 2D canvas redraw) instead of rebuilding mesh JSON like
+    # the Plotly version does, which is what makes this lighter at runtime.
+    # three.js is dynamically imported inside render() (not as a static ES
+    # import) so the "Loading 3D view…" placeholder actually appears on screen
+    # immediately instead of the widget staying blank while the CDN fetch
+    # resolves.
+    ESM = r"""
+    function toThree(THREE, v) { return new THREE.Vector3(v[0], v[2], v[1]); }
 
-    def spin_figure(times, r, frequency_axis, p_down, p_x, view):
-        fig = make_subplots(rows=1, cols=2, specs=[[{"type": "scene"}, {"type": "xy"}]],
-                            column_widths=[0.53, 0.47], horizontal_spacing=0.07,
-                            subplot_titles=(f"Bloch sphere · {view.lower()}", "Measurement probabilities"))
-        a = np.linspace(0, 2*np.pi, 70)
-        b = np.linspace(0, np.pi, 35)
-        sphere = go.Surface(x=np.outer(np.cos(a), np.sin(b)), y=np.outer(np.sin(a), np.sin(b)),
-                            z=np.outer(np.ones_like(a), np.cos(b)), opacity=0.12,
-                            colorscale=[[0, "#a8c4dc"], [1, "#a8c4dc"]], showscale=False,
-                            hoverinfo="skip", name="Sphere")
-        fig.add_trace(sphere, row=1, col=1)
-        for xyz in [(np.cos(a), np.sin(a), np.zeros_like(a)),
-                    (np.cos(a), np.zeros_like(a), np.sin(a)),
-                    (np.zeros_like(a), np.cos(a), np.sin(a))]:
-            fig.add_trace(go.Scatter3d(x=xyz[0], y=xyz[1], z=xyz[2], mode="lines",
-                          line=dict(color="#a5b3bf", width=2), showlegend=False, hoverinfo="skip"), row=1, col=1)
-        for axis, label in zip(np.eye(3), ["x", "y", "z"]):
-            endpoints = np.array([-1.15*axis, 1.18*axis])
-            fig.add_trace(go.Scatter3d(x=endpoints[:, 0], y=endpoints[:, 1], z=endpoints[:, 2],
-                          mode="lines+text", text=["", label], textposition="top center",
-                          line=dict(color="#555555", width=2), showlegend=False, hoverinfo="skip"), row=1, col=1)
+    function makeTextSprite(THREE, text) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 128; canvas.height = 128;
+      const ctx = canvas.getContext("2d");
+      ctx.font = "bold 92px Georgia, serif";
+      ctx.fillStyle = "#243247";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, 64, 68);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.minFilter = THREE.LinearFilter;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(0.22, 0.22, 1);
+      return sprite;
+    }
 
-        def traces(i):
-            return [
-                go.Scatter3d(x=r[:i+1, 0], y=r[:i+1, 1], z=r[:i+1, 2], mode="lines",
-                             line=dict(color="#4a7ac0", width=4), showlegend=False, hoverinfo="skip"),
-                arrow3d(r[i], "#235ba8", "Spin ⟨σ⟩"),
-                arrow3d(frequency_axis[i], "#dd8b22", "Frequency axis"),
-                go.Scatter(x=[times[i], times[i]], y=[p_down[i], p_x[i]], mode="markers",
-                           marker=dict(size=9, color=["#235ba8", "#b04d86"]), showlegend=False),
-            ]
-        dynamic = [len(fig.data), len(fig.data)+1, len(fig.data)+2]
-        for trace in traces(0)[:3]:
-            fig.add_trace(trace, row=1, col=1)
-        fig.add_trace(go.Scatter(x=times, y=p_down, name="P(−z)",
-                                 line=dict(color="#235ba8", width=2.5)), row=1, col=2)
-        fig.add_trace(go.Scatter(x=times, y=p_x, name="P(+x), lab",
-                                 line=dict(color="#b04d86", width=2, dash="dot")), row=1, col=2)
-        dynamic.append(len(fig.data))
-        fig.add_trace(traces(0)[3], row=1, col=2)
-        fig.frames = [go.Frame(name=str(i), data=traces(i), traces=dynamic) for i in range(len(times))]
-        axis_style = dict(visible=False, range=[-1.3, 1.3])
-        fig.update_layout(scene=dict(xaxis=axis_style, yaxis=axis_style, zaxis=axis_style,
-                                    aspectmode="cube", bgcolor="white",
-                                    camera=dict(eye=dict(x=0.90, y=0.90, z=0.65))))
-        fig.update_xaxes(title="Time t", range=[0, times[-1]], showgrid=True, gridcolor="#edf0f3")
-        fig.update_yaxes(title="Probability", range=[-0.03, 1.03], tickvals=[0, 0.5, 1], gridcolor="#edf0f3")
+    function makeArrow(THREE, color) {
+      const group = new THREE.Group();
+      const shaftGeom = new THREE.CylinderGeometry(0.022, 0.022, 1, 14);
+      shaftGeom.translate(0, 0.5, 0);
+      const headGeom = new THREE.ConeGeometry(0.065, 0.18, 18);
+      const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.05 });
+      const shaft = new THREE.Mesh(shaftGeom, mat);
+      const head = new THREE.Mesh(headGeom, mat);
+      group.add(shaft); group.add(head);
+      group.userData = { shaft, head };
+      return group;
+    }
 
-        def animation_options(duration):
-            return dict(mode="immediate", fromcurrent=True,
-                        frame=dict(duration=duration, redraw=True), transition=dict(duration=0))
-        fig.update_layout(template="plotly_white", height=510,
-            font=dict(family="Georgia, serif", size=13, color="#243247"),
-            margin=dict(l=45, r=15, t=65, b=110),
-            legend=dict(orientation="h", x=0, y=1.14, font=dict(size=12)),
-            updatemenus=[dict(type="buttons", direction="left", x=0, y=-0.18,
-                buttons=[dict(label="▶ Play", method="animate", args=[None, animation_options(65)]),
-                         dict(label="Pause", method="animate", args=[[None], animation_options(0)]),
-                         dict(label="Reset", method="animate", args=[["0"], animation_options(0)])])],
-            sliders=[dict(active=0, x=0, y=-0.04, len=1, ticklen=0, font=dict(size=10),
-                currentvalue=dict(prefix="t = ", font=dict(size=13)),
-                steps=[dict(label=f"{t:.2f}", method="animate", args=[[str(i)], animation_options(0)])
-                       for i, t in enumerate(times)])])
-        return fig
+    function updateArrow(THREE, group, vec3) {
+      const len = vec3.length();
+      if (len < 1e-6) { group.visible = false; return; }
+      group.visible = true;
+      const dir = vec3.clone().normalize();
+      const headLen = Math.min(0.2, 0.35 * len);
+      const shaftLen = Math.max(len - headLen, 0.001);
+      group.userData.shaft.scale.set(1, shaftLen, 1);
+      group.userData.head.position.set(0, shaftLen + headLen / 2, 0);
+      group.userData.head.scale.set(1, headLen / 0.18, 1);
+      group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    }
 
-    return (spin_figure,)
+    function makeCircle(THREE, plane) {
+      const pts = [];
+      for (let i = 0; i <= 64; i++) {
+        const a = (i / 64) * Math.PI * 2;
+        if (plane === "xy") pts.push(new THREE.Vector3(Math.cos(a), Math.sin(a), 0));
+        if (plane === "xz") pts.push(new THREE.Vector3(Math.cos(a), 0, Math.sin(a)));
+        if (plane === "yz") pts.push(new THREE.Vector3(0, Math.cos(a), Math.sin(a)));
+      }
+      const geom = new THREE.BufferGeometry().setFromPoints(pts);
+      const mat = new THREE.LineBasicMaterial({ color: 0xa5b3bf });
+      return new THREE.Line(geom, mat);
+    }
+
+    async function render({ model, el }) {
+      el.innerHTML = `<div style="padding:50px 20px; text-align:center; color:#8a94a6; font-family: Georgia, serif;">Loading 3D view…</div>`;
+
+      const [THREE, { OrbitControls }] = await Promise.all([
+        import("https://esm.sh/three@0.160.0"),
+        import("https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js"),
+      ]);
+
+      const legendRow = (color, label) =>
+        `<span style="margin-right:12px;"><span style="display:inline-block;width:9px;height:9px;` +
+        `background:${color};border-radius:2px;margin-right:4px;"></span>${label}</span>`;
+      el.innerHTML = `
+        <div style="display:flex; gap:14px; align-items:flex-start; font-family: Georgia, serif; flex-wrap: wrap;">
+          <div>
+            <div style="font-size:12px; color:#243247; margin-bottom:3px; display:flex; justify-content:space-between;">
+              <span class="scene-title"></span>
+              <span>${legendRow("#dd8b22", "B-field axis")}${legendRow("#235ba8", "Spin ⟨σ⟩")}</span>
+            </div>
+            <div class="scene-container" style="width:300px; height:300px; cursor: grab;"></div>
+            <div style="margin-top:8px; display:flex; align-items:center; gap:6px;">
+              <button class="play-btn">&#9654; Play</button>
+              <button class="pause-btn">Pause</button>
+              <button class="reset-btn">Reset</button>
+              <input type="range" class="time-slider" min="0" max="200" value="0" style="flex:1; min-width:80px;">
+              <span class="time-label" style="font-size:12px; color:#243247;">t = 0.00</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:12px; color:#243247; margin-bottom:3px;">
+              Measurement probabilities &nbsp;
+              ${legendRow("#235ba8", "P(−z)")}${legendRow("#b04d86", "P(+x), lab")}
+            </div>
+            <canvas class="prob-canvas" width="300" height="300" style="border:1px solid #dce3eb; border-radius:8px;"></canvas>
+          </div>
+        </div>
+      `;
+      el.querySelector(".scene-title").textContent = model.get("title") || "";
+
+      const sceneContainer = el.querySelector(".scene-container");
+      const probCanvas = el.querySelector(".prob-canvas");
+      const playBtn = el.querySelector(".play-btn");
+      const pauseBtn = el.querySelector(".pause-btn");
+      const resetBtn = el.querySelector(".reset-btn");
+      const slider = el.querySelector(".time-slider");
+      const timeLabel = el.querySelector(".time-label");
+
+      const times = model.get("times");
+      const rArr = model.get("r");
+      const bArr = model.get("b_axis");
+      const pDown = model.get("p_down");
+      const pX = model.get("p_x");
+      const N = times.length;
+      slider.max = String(N - 1);
+
+      const width = 300, height = 300;
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      sceneContainer.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 100);
+      camera.position.set(2.7, 2.0, 2.7);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.target.set(0, 0, 0);
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+      dirLight.position.set(2.5, 3.5, 2);
+      scene.add(dirLight);
+
+      const sphereGeom = new THREE.SphereGeometry(1, 48, 32);
+      const sphereMat = new THREE.MeshBasicMaterial({ color: 0xa8c4dc, transparent: true, opacity: 0.12 });
+      scene.add(new THREE.Mesh(sphereGeom, sphereMat));
+      ["xy", "xz", "yz"].forEach((p) => scene.add(makeCircle(THREE, p)));
+
+      const axisMat = new THREE.LineBasicMaterial({ color: 0x555555 });
+      [[1, 0, 0], [0, 1, 0], [0, 0, 1]].forEach((dir) => {
+        const a = toThree(THREE, dir.map((c) => -1.15 * c));
+        const b = toThree(THREE, dir.map((c) => 1.18 * c));
+        const geom = new THREE.BufferGeometry().setFromPoints([a, b]);
+        scene.add(new THREE.Line(geom, axisMat));
+      });
+      const labelPos = { x: [1.3, 0, 0], y: [0, 1.3, 0], z: [0, 0, 1.3] };
+      Object.entries(labelPos).forEach(([name, pos]) => {
+        const s = makeTextSprite(THREE, name);
+        s.position.copy(toThree(THREE, pos));
+        scene.add(s);
+      });
+
+      const spinArrow = makeArrow(THREE, 0x235ba8);
+      const bArrow = makeArrow(THREE, 0xdd8b22);
+      scene.add(spinArrow, bArrow);
+
+      const rFlat = new Float32Array(N * 3);
+      for (let i = 0; i < N; i++) {
+        const v = toThree(THREE, rArr[i]);
+        rFlat[3 * i] = v.x; rFlat[3 * i + 1] = v.y; rFlat[3 * i + 2] = v.z;
+      }
+      const trailGeom = new THREE.BufferGeometry();
+      trailGeom.setAttribute("position", new THREE.BufferAttribute(rFlat, 3));
+      trailGeom.setDrawRange(0, 1);
+      const trailLine = new THREE.Line(trailGeom, new THREE.LineBasicMaterial({ color: 0x4a7ac0 }));
+      scene.add(trailLine);
+
+      function drawProb(i) {
+        const ctx = probCanvas.getContext("2d");
+        const W = probCanvas.width, H = probCanvas.height;
+        ctx.clearRect(0, 0, W, H);
+        const mL = 36, mB = 28, mT = 12, mR = 10;
+        const pw = W - mL - mR, ph = H - mT - mB;
+        const tMax = times[N - 1];
+        const xOf = (t) => mL + (t / tMax) * pw;
+        const yOf = (p) => mT + (1 - p) * ph;
+        ctx.strokeStyle = "#edf0f3";
+        ctx.lineWidth = 1;
+        [0, 0.5, 1].forEach((p) => {
+          ctx.beginPath(); ctx.moveTo(mL, yOf(p)); ctx.lineTo(W - mR, yOf(p)); ctx.stroke();
+        });
+        ctx.strokeStyle = "#999"; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(mL, mT); ctx.lineTo(mL, H - mB); ctx.lineTo(W - mR, H - mB);
+        ctx.stroke();
+        ctx.fillStyle = "#243247"; ctx.font = "10px Georgia, serif"; ctx.textAlign = "right";
+        [0, 0.5, 1].forEach((p) => ctx.fillText(p.toFixed(1), mL - 5, yOf(p) + 3));
+        ctx.textAlign = "center";
+        ctx.fillText("Time t", mL + pw / 2, H - 6);
+
+        function line(arr, color, dash) {
+          ctx.strokeStyle = color; ctx.lineWidth = 2;
+          ctx.setLineDash(dash || []);
+          ctx.beginPath();
+          for (let k = 0; k < N; k++) {
+            const x = xOf(times[k]), y = yOf(arr[k]);
+            if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        line(pDown, "#235ba8");
+        line(pX, "#b04d86", [4, 3]);
+
+        ctx.fillStyle = "#235ba8";
+        ctx.beginPath(); ctx.arc(xOf(times[i]), yOf(pDown[i]), 4, 0, 7); ctx.fill();
+        ctx.fillStyle = "#b04d86";
+        ctx.beginPath(); ctx.arc(xOf(times[i]), yOf(pX[i]), 4, 0, 7); ctx.fill();
+      }
+
+      let currentIndex = 0;
+      let playing = false;
+      function updateFrame(i) {
+        currentIndex = i;
+        updateArrow(THREE, spinArrow, toThree(THREE, rArr[i]));
+        updateArrow(THREE, bArrow, toThree(THREE, bArr[i]));
+        trailLine.geometry.setDrawRange(0, i + 1);
+        slider.value = String(i);
+        timeLabel.textContent = "t = " + times[i].toFixed(2);
+        drawProb(i);
+      }
+
+      playBtn.onclick = () => { playing = true; };
+      pauseBtn.onclick = () => { playing = false; };
+      resetBtn.onclick = () => { playing = false; updateFrame(0); };
+      slider.oninput = (e) => { playing = false; updateFrame(parseInt(e.target.value, 10)); };
+
+      updateFrame(0);
+
+      let lastStep = 0;
+      function loop(now) {
+        requestAnimationFrame(loop);
+        controls.update();
+        if (playing && now - lastStep > 65) {
+          lastStep = now;
+          const next = currentIndex + 1 >= N ? 0 : currentIndex + 1;
+          updateFrame(next);
+          if (next === 0) playing = false;
+        }
+        renderer.render(scene, camera);
+      }
+      requestAnimationFrame(loop);
+    }
+
+    export default { render };
+    """
+
+    class BlochWidget(anywidget.AnyWidget):
+        _esm = ESM
+        title = traitlets.Unicode("").tag(sync=True)
+        times = traitlets.List([]).tag(sync=True)
+        r = traitlets.List([]).tag(sync=True)
+        b_axis = traitlets.List([]).tag(sync=True)
+        p_down = traitlets.List([]).tag(sync=True)
+        p_x = traitlets.List([]).tag(sync=True)
+
+    return (BlochWidget,)
 
 
 @app.cell(hide_code=True)
 def _(
+    BlochWidget,
     bloch_vector,
     evolve_spin,
     initial_spin,
     mo,
     np,
-    spin_figure,
     spin_presets,
 ):
     # INTERFACE ADAPTER: read controls, call the physics, assemble ONE output.
@@ -273,21 +448,26 @@ def _(
         r = bloch_vector(rot) if view == "Rotating" else r_lab
         p_down = np.abs(lab[:, 1])**2
         p_x = (1+r_lab[:, 0])/2
-        frequency_axis = np.zeros((len(times), 3))
+        b_axis = np.zeros((len(times), 3))
         for i, t in enumerate(times):
             v = np.array([w1, 0, w0+w]) if view == "Rotating" else np.array([w1*np.cos(w*t), w1*np.sin(w*t), w0])
             if np.linalg.norm(v) > 0:
-                frequency_axis[i] = v/np.linalg.norm(v)
-        fig = spin_figure(times, r, frequency_axis, p_down, p_x, view)
-        chart = mo.ui.plotly(fig, config={"displayModeBar": False, "responsive": True})
-        # No widget has a separate output cell; controls sit inside this card.
+                b_axis[i] = v/np.linalg.norm(v)
+
+        widget = mo.ui.anywidget(BlochWidget(
+            times=times.tolist(), r=r.tolist(), b_axis=b_axis.tolist(),
+            p_down=p_down.tolist(), p_x=p_x.tolist(),
+            title=f"Bloch sphere · {view.lower()}",
+        ))
+
         widgets = [controls["initial"], controls["omega0"]]
         if rotating:
             widgets += [controls["omega1"], controls["omega"], controls["frame"]]
         widgets += [controls["end"], mo.accordion({"Custom initial angles":
                    mo.vstack([controls["theta"], controls["phi"],
                               mo.md("Used only with **Custom angles**.")])})]
-        sidebar = mo.vstack(widgets, gap=0.6)
+        sidebar = mo.vstack(widgets, gap=0.3)
+
         norm_error = max(abs(np.sum(abs(psi)**2)-1) for psi in lab)
         details = f"Norm error: {norm_error:.1e}. "
         if rotating:
@@ -299,81 +479,12 @@ def _(
                 if rotating else "Compare +x and +z; watch P(+x) as well as the spin direction.")
         panel = mo.vstack([
             mo.md(f"### {title}\n{hint}"),
-            mo.hstack([sidebar, chart], widths=[1, 4], align="start", gap=1.0),
-            mo.md("**Play · Pause · Reset · time slider** below the plots. Changes restart at t = 0. "
-                  "Drag the sphere to rotate the view. The orange arrow is a unit frequency axis.\n\n"+details),
-        ], gap=0.7).style({"border":"1px solid #dce3eb", "border-radius":"12px", "padding":"18px", "margin-bottom":"20px"})
-        return panel, fig
+            mo.hstack([sidebar, widget], widths=[1, 4], align="start", gap=0.6),
+            mo.md("Drag the sphere any time, including while playing. " + details),
+        ], gap=0.3).style({"border":"1px solid #dce3eb", "border-radius":"12px", "padding":"12px", "margin-bottom":"14px"})
+        return panel
 
     return (simulation_panel,)
-
-
-@app.cell(hide_code=True)
-def _(make_controls):
-    precession_controls = make_controls(rotating=False)
-    return (precession_controls,)
-
-
-@app.cell(hide_code=True)
-def _(precession_controls, simulation_panel):
-    precession_panel, precession_fig = simulation_panel(precession_controls, precession_controls.value, rotating=False)
-    precession_panel
-    return
-
-
-@app.cell(hide_code=True)
-def _(make_controls):
-    resonance_controls = make_controls(rotating=True)
-    return (resonance_controls,)
-
-
-@app.cell(hide_code=True)
-def _(resonance_controls, simulation_panel):
-    resonance_panel, resonance_fig = simulation_panel(resonance_controls, resonance_controls.value, rotating=True)
-    resonance_panel
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Predict → try → explain
-
-    1. **Stationary state versus stationary spin direction.** In the precession panel compare
-       $|+z\rangle$ and $|+x\rangle$. Predict which probabilities change and which do not.
-       Does a constant Bloch vector imply the ket has no time dependence?
-    2. **Find resonance.** In the resonance panel, select initial $|+z\rangle$, $\omega_0=1$,
-       $\omega_1=0.3$. Find the signed $\omega$ that gives a complete spin flip.
-       Switch frames: why is one trajectory simpler? Predict the first flip time.
-    3. **Detune.** Change $\omega$ by $0.3$. Predict whether oscillations become
-       faster or slower, and whether their amplitude increases or decreases.
-    4. **Edit the physics.** Change the sign of `omega_0` through its slider and find resonance
-       again. Then add a preset for $|-x\rangle$ in `spin_presets`. Check its initial Bloch vector before playing.
-    5. **Extension (a different model).** Replace the circular field by a linearly
-       polarized field, $H=-[\omega_0\sigma_z+\omega_1\cos(\omega t)\sigma_x]/2$.
-       The constant `H_eff` used here no longer solves that problem exactly.
-       Write a time-stepping solver and check norm and step-size convergence.
-       Compare its weak-drive resonance with the circular-field case.
-
-    **AI as a checking partner:** derive the rotating-frame Hamiltonian yourself, then ask:
-    “Check each sign in my derivation using this $H(t)$ and $R(t)$; do not replace my
-    convention.” Test its answer by changing the sign of $\omega_0$.
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.accordion({"Discussion notes — open after making predictions": mo.md(r"""
-    For a static field, $|+z\rangle$ gains a global phase, while the relative phase
-    of $|+x\rangle$ evolves. Its $z$ probabilities stay $1/2$, but its Bloch vector precesses.
-    For initial $|+z\rangle$ and $\alpha=\sqrt{(\omega_0+\omega)^2+\omega_1^2}$,
-    $$P_{-z}(t)=\frac{\omega_1^2}{\alpha^2}\sin^2(\alpha t/2).$$
-    At resonance the first complete flip is at $t=\pi/|\omega_1|$.
-    Detuning increases $\alpha$ while reducing the maximum flip probability.
-    If both detuning and drive vanish, take the continuous limit $P_{-z}=0$.
-    """)})
-    return
 
 
 if __name__ == "__main__":
