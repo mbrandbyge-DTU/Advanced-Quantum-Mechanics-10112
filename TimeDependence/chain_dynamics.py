@@ -73,7 +73,15 @@ def _(np):
         return H
 
     def initial_chain(N, kind, site, width, k):
-        """site is 1-based; k is in radians per lattice spacing."""
+        """site is 1-based; k is in radians per lattice spacing.
+
+        Clamped to [1, N]: the site slider is rebuilt with a new upper bound
+        whenever N changes, but can briefly still report a value from the
+        previous, larger N (e.g. right after dragging N down) before the
+        browser's new slider position reaches the kernel. Without this,
+        that stale value indexes past the end of a smaller chain.
+        """
+        site = int(np.clip(site, 1, N))
         positions = np.arange(1, N+1)
         if kind == "Localized site":
             psi = np.zeros(N, dtype=complex)
