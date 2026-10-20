@@ -1,4 +1,4 @@
-##The Hubbard Model for two electrons on a ring
+## The Hubbard Model for two electrons on a ring
 
 This problem studies the Hubbard model in one dimension.
 The Hubbard model approximates the long-range Coulomb repulsion between 
@@ -6,12 +6,10 @@ electrons as an on-site repulsion energy $U.$  The model is otherwise
 a tight-binding Hamiltonian with nearest-neighbor hopping.
 
 The Hamiltonian is written
-$
-H=H_{TB}+H_C=-\sum_{n,s}t(c^\ldagger_{n+1,s}c^\pd_{n,s}
+$$H=H_{TB}+H_C=-\sum_{n,s}t(c^\ldagger_{n+1,s}c^\pd_{n,s}
 	  	      + c^\ldagger_{n,s}c^\pd_{n+1,s}) +
 \sum_{n} U c^\ldagger_{n,\uparrow}c^\pd_{n,\uparrow}
-	c^\ldagger_{n,\downarrow}c^\pd_{n,\downarrow}
-$
+	c^\ldagger_{n,\downarrow}c^\pd_{n,\downarrow}$$
 
 $n$ is running from $1$ to $L$, where we imagine the L sites organized in
 a ring so that the electron can also hop from site $L$ to site $1$.
