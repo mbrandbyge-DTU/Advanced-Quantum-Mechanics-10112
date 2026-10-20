@@ -1,0 +1,107 @@
+\documentclass[a4paper,12pt]{article}
+\pagestyle{empty}
+
+\begin{document}
+\begin{center}
+{\Large\bf 10112 Advanced Quantum Mechanics}
+\vspace{.5cm}\\
+{\large\bf Hubbard model on a ring.}
+\end{center}
+
+\def\pd{{\phantom\ldagger}}
+\def\bra#1{\langle\,#1\,\vert}
+\def\ket#1{\vert\,#1\,\rangle}
+\def\ldagger{{\dagger}}
+
+\begin{description}
+
+\item[The Hubbard Model for two electrons on a ring:]\footnote{This problem set was originally written by Jim Sethna at Cornell
+University.}
+This problem studies the Hubbard model in one dimension.
+The Hubbard model approximates the long-range Coulomb repulsion between 
+electrons as an on-site repulsion energy $U.$  The model is otherwise
+a tight-binding Hamiltonian with nearest-neighbor hopping.
+
+The Hamiltonian is written
+\begin{equation}
+  \label{eq:2}
+H=H_{TB}+H_C=-\sum_{n,s}t(c^\ldagger_{n+1,s}c^\pd_{n,s}
+	  	      + c^\ldagger_{n,s}c^\pd_{n+1,s}) +
+\sum_{n} U c^\ldagger_{n,\uparrow}c^\pd_{n,\uparrow}
+	c^\ldagger_{n,\downarrow}c^\pd_{n,\downarrow}
+  \end{equation}
+
+$n$ is running from $1$ to $L$, where we imagine the L sites organized in
+a ring so that the electron can also hop from site $L$ to site $1$.
+We can see that $t$, the hopping matrix element, represents a kinetic 
+energy for the electrons which is lowered if the wavefunction delocalizes
+into long-wavelength plane waves.  Indeed, the eigenstates in the absence
+of electron-electron interactions are plane waves.
+
+We can introduce the creation operator for a single-particle plane-wave:
+\begin{equation}
+\psi^\ldagger_{k,s} = {1\over\sqrt{L}}\sum_n
+e^{ink}c^\ldagger_{n,s}
+\end{equation}
+It can be shown (you are welcome to do that if you like) that the
+Hamiltonian in this representation is diagonal and equal to
+
+$$H_{TB}=\sum_{k,s}\varepsilon_k \psi^\ldagger_{k,s}\psi_{k,s}$$
+
+with $\varepsilon_k = - 2 t \cos(k)$ and where $k$ runs over
+$\frac{2\pi}{L}p, p=0,1,\ldots,L-1$.
+
+\begin{itemize}
+\item Discuss the meaning of this expression for $H_{TB}$.
+
+\item Explain what the operator $H_c$ does to a state.
+\end{itemize}
+
+We will study the two-electron $N=2$ problem on a ring of 
+$L = 6$ sites, with one spin up and one spin down ($S_z=0$).  We can work
+in a plane-wave basis: 
+\begin{equation}
+  \label{eq:1}
+|k_1 \uparrow, k_2 \downarrow \rangle =
+\psi^\dagger_{k_1\uparrow}\psi^\dagger_{k_2\downarrow} |0\rangle
+\end{equation}
+The total crystal momentum is a good quantum number and we shall
+consider states with zero crystal momentum so $k_1 + k_2 = 0$.
+
+\begin{itemize}
+\item  Discuss that the kinetic
+term $H_{TB}$ is diagonal in this basis, and show that the on-site repulsion
+has matrix elements 
+$$\bra{k\uparrow,-k\downarrow}H_C\ket{k'\uparrow,-k'\downarrow} = U/L$$
+independent of $k$ and $k'.$
+\end{itemize}
+You now have to do a bit of numerical work. You can for example use
+the IPython notebook ``hubbard\_on\_a\_ring.ipynb''.
+
+\begin{itemize}
+\item Compute the eigenfunctions and eigenenergies for total crystal momentum zero.
+  Plot the eigenenergies vs. $U$ for $U/t$ ranging from zero to four.
+\end{itemize}
+
+Notice that the ground state and the highest excited state change
+smoothly as we increase $U$.
+\begin{itemize}
+\item What happens to the other two states?  Which of the states are
+  singlets, and which triplets (total spin zero and one)?  Why are the
+  triplet energies so boring?
+\end{itemize} The coulomb repulsion alters the wavefunctions
+rather more than is apparent in the energy.
+\begin{itemize}
+\item Calculate the ground state wavefunction in real space
+  $\Psi_0(n_1,n_2)$.  It should depend only on $n_1-n_2$; plot
+  $\Psi_{0}(n_1-n_2)$ and discuss the hole at $n_1 = n_2.$ How does
+  the depth of the hole depend on $U$? Why?
+\end{itemize}
+\end{description}
+\end{document}
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:
