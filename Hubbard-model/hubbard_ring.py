@@ -26,21 +26,72 @@ def _(mo):
     **DTU 10112 · Problem set "Hubbard model on a ring"** · one ↑ and one ↓ electron on $L$ sites, energies in units of $t$:
     $H=-t\sum_{n,s}\big(c^\dagger_{n+1,s}c_{n,s}+c^\dagger_{n,s}c_{n+1,s}\big)+U\sum_n c^\dagger_{n\uparrow}c_{n\uparrow}c^\dagger_{n\downarrow}c_{n\downarrow}$.
     In the zero-momentum basis $|k\uparrow,-k\downarrow\rangle$: $\;\langle k|H|k'\rangle=2\varepsilon_k\,\delta_{kk'}+U/L$, with $\varepsilon_k=-2t\cos k$.
-    Make the predictions in the section **Predict → try → explain** at the bottom, then use the two experiments below.
+    Each experiment below has its questions directly above it: predict first, then try.
     """)
     return
 
 
 @app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Predict → try → explain: spectrum and eigenstates
+
+    1. **No interaction.** Before touching anything: for $L=6$ and $U=0$, list the pair energies
+       $-4t\cos k$. Which are degenerate, and why? Check at $U=0$.
+    2. **Switch on $U$.** Predict which levels move when $U$ grows from 0 to 4. Then look: how many
+       states change, how many stay put? Step through $n$ and use the $\phi(k)$ panel to decide which are
+       singlets and which triplets. Why are the triplet energies so boring?
+    3. **The matrix element $U/L$.** Show $\langle k\uparrow,-k\downarrow|H_C|k'\uparrow,-k'\downarrow\rangle=U/L$ on paper.
+       Then find it in `pair_hamiltonian`. What happens to the triplets if the interaction is not
+       on-site (task 7)?
+    """)
+    return
+
+
+@app.cell(hide_code=True, expand_output=True)
 def _(spectrum_L, spectrum_U, spectrum_panel, spectrum_range, spectrum_state):
-    _widgets = {"L": spectrum_L, "U": spectrum_U, "range": spectrum_range, "n": spectrum_state}
+    _widgets = {"L": spectrum_L, "range": spectrum_range, "U": spectrum_U, "n": spectrum_state}
     spectrum_panel(_widgets, {_k: _w.value for _k, _w in _widgets.items()})
     return
 
 
 @app.cell(hide_code=True)
-def _(hole_controls, hole_panel):
-    hole_panel(hole_controls, hole_controls.value)
+def _(mo):
+    mo.md(r"""
+    ## Predict → try → explain: the correlation hole
+
+    4. **The correlation hole.** Predict the ground-state $P(r)$ at $U=0$. Increase $U$:
+       how does the depth of the hole at $r=0$ depend on $U$? Why does it not go straight to zero?
+       Compare $U/t=2$, 10, 50, then choose the U axis −10 to 50 and switch on the log scale: how fast does $P(0)$
+       fall at large $U$?
+    5. **Energy versus wavefunction.** The ground-state energy changes only modestly with $U$, while
+       $P(0)$ changes a lot. Compare the blue line with the green dots and explain with the
+       Hellmann–Feynman theorem. What do the green dots tell you about the curvature of $E_0(U)$?
+    6. **Attraction.** Set $U<0$. What happens to the pair? Predict $P(0)$ as $U\to-\infty$.
+       Does the answer depend on $L$?
+    7. **Edit the physics.** Add a nearest-neighbour repulsion $V$ between the two electrons. In this basis
+       it gives $\langle k|H_V|k'\rangle=\frac{2V}{L}\cos(k-k')$; add in `pair_hamiltonian`
+       (before `return H`):
+       ```python
+       V = 1.0
+       for p in range(L):
+           for q in range(L):
+               H[p, q] += 2 * V / L * np.cos(k[p] - k[q])
+       ```
+       Predict first: do the triplet levels still stay flat as $U$ changes? Do they move compared with $V=0$?
+       Where does the ground-state $P(r)$ now peak?
+
+    **AI as a checking partner:** derive the $U/L$ matrix element yourself, then ask an AI assistant
+    to derive the nearest-neighbour matrix element of task 7. Check its answer against the
+    notebook: do the triplets move as you predicted?
+    """)
+    return
+
+
+@app.cell(hide_code=True, expand_output=True)
+def _(hole_L, hole_U, hole_log, hole_panel, hole_range):
+    _widgets = {"L": hole_L, "range": hole_range, "U": hole_U, "log": hole_log}
+    hole_panel(_widgets, {_k: _w.value for _k, _w in _widgets.items()})
     return
 
 
@@ -181,9 +232,15 @@ def _(mo):
     # INTERFACE ONLY: controls for the spectrum experiment that do not depend on each other.
     U_ranges = {"0 to 4 (problem set)": (0.0, 4.0), "−8 to 8": (-8.0, 8.0), "−10 to 50": (-10.0, 50.0)}
     spectrum_L = mo.ui.slider(2, 16, step=1, value=6, label="Ring size L", show_value=True)
-    spectrum_U = mo.ui.slider(-10, 50, step=0.1, value=2.0, label="U / t", show_value=True)
     spectrum_range = mo.ui.dropdown(list(U_ranges), value="0 to 4 (problem set)", label="U axis")
-    return U_ranges, spectrum_L, spectrum_U, spectrum_range
+
+    def U_slider(axis_label):
+        """A U/t slider spanning exactly the chosen U-axis range."""
+        lo, hi = U_ranges[axis_label]
+        return mo.ui.slider(lo, hi, step=0.1, value=min(max(2.0, lo), hi),
+                            label="U / t", show_value=True)
+
+    return U_ranges, U_slider, spectrum_L, spectrum_range
 
 
 @app.cell(hide_code=True)
@@ -197,15 +254,26 @@ def _(mo, spectrum_L):
 
 
 @app.cell(hide_code=True)
+def _(U_slider, spectrum_range):
+    # INTERFACE ONLY: own cell, so the slider is rebuilt whenever the U axis changes.
+    spectrum_U = U_slider(spectrum_range.value)
+    return (spectrum_U,)
+
+
+@app.cell(hide_code=True)
 def _(U_ranges, mo):
     # INTERFACE ONLY: independent controls for the correlation-hole experiment.
-    hole_controls = mo.ui.dictionary({
-        "L": mo.ui.slider(2, 16, step=1, value=6, label="Ring size L", show_value=True),
-        "U": mo.ui.slider(-10, 50, step=0.1, value=2.0, label="U / t", show_value=True),
-        "range": mo.ui.dropdown(list(U_ranges), value="−8 to 8", label="U axis"),
-        "log": mo.ui.checkbox(value=False, label="log scale for P(0)"),
-    })
-    return (hole_controls,)
+    hole_L = mo.ui.slider(2, 16, step=1, value=6, label="Ring size L", show_value=True)
+    hole_range = mo.ui.dropdown(list(U_ranges), value="−8 to 8", label="U axis")
+    hole_log = mo.ui.checkbox(value=False, label="log scale for P(0)")
+    return hole_L, hole_log, hole_range
+
+
+@app.cell(hide_code=True)
+def _(U_slider, hole_range):
+    # INTERFACE ONLY: own cell, so the slider is rebuilt whenever the U axis changes.
+    hole_U = U_slider(hole_range.value)
+    return (hole_U,)
 
 
 @app.cell(hide_code=True)
@@ -320,11 +388,13 @@ def _(
 ):
     # INTERFACE ADAPTER: read controls, call the physics, assemble ONE output.
     def spectrum_panel(controls, values):
-        L, U = values["L"], values["U"]
-        # The n slider is rebuilt when L changes but can report a stale value for one tick.
-        n = int(np.clip(values["n"], 0, L - 1))
+        L = values["L"]
         lo, hi = U_ranges[values["range"]]
-        U_grid = np.linspace(min(lo, U), max(hi, U), 241)
+        # The n and U sliders are rebuilt when L or the U axis changes, but can
+        # report a stale value for one tick.
+        n = int(np.clip(values["n"], 0, L - 1))
+        U = float(np.clip(values["U"], lo, hi))
+        U_grid = np.linspace(lo, hi, 241)
         singlets, triplets = spectrum_vs_U(L, U_grid)
 
         E, phi, S = solve_pair(L, U)
@@ -350,7 +420,7 @@ def _(
                    f"Gray marks in the right panel: the same level at U = 0.")
         panel = mo.vstack([
             mo.md("### Experiment 1 — spectrum and eigenstates"),
-            mo.hstack([controls["L"], controls["U"], controls["range"], controls["n"]],
+            mo.hstack([controls["L"], controls["range"], controls["U"], controls["n"]],
                       wrap=True, gap=0.8, justify="start"),
             chart,
             mo.md(details),
@@ -373,13 +443,14 @@ def _(
 ):
     # INTERFACE ADAPTER: read controls, call the physics, assemble ONE output.
     def hole_panel(controls, values):
-        L, U = values["L"], values["U"]
+        L = values["L"]
+        lo, hi = U_ranges[values["range"]]
+        U = float(np.clip(values["U"], lo, hi))   # stale value after a U-axis change
         E, phi, _ = solve_pair(L, U)
         P = separation_probability(phi[:, 0], L)
         _, phi_free, _ = solve_pair(L, 0.0)
         P_free = separation_probability(phi_free[:, 0], L)
-        lo, hi = U_ranges[values["range"]]
-        U_grid = np.linspace(min(lo, U), max(hi, U), 401)
+        U_grid = np.linspace(lo, hi, 401)
         E0_grid, D_grid = ground_state_vs_U(L, U_grid)
 
         fig = hole_figure(L, P, P_free, U_grid, E0_grid, D_grid, U, P[0], values["log"])
@@ -391,7 +462,7 @@ def _(
                    "Open circles on the ring: U = 0. Green dots: slope dE₀/dU of the ground-state energy.")
         panel = mo.vstack([
             mo.md("### Experiment 2 — the correlation hole"),
-            mo.hstack([controls["L"], controls["U"], controls["range"], controls["log"]],
+            mo.hstack([controls["L"], controls["range"], controls["U"], controls["log"]],
                       wrap=True, gap=0.8, justify="start"),
             chart,
             mo.md(details),
@@ -400,47 +471,6 @@ def _(
         return panel
 
     return (hole_panel,)
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Predict → try → explain
-
-    1. **No interaction.** Before touching anything: for $L=6$ and $U=0$, list the pair energies
-       $-4t\cos k$. Which are degenerate, and why? Check with Experiment 1 at $U=0$.
-    2. **Switch on $U$.** Predict which levels move when $U$ grows from 0 to 4. Then look: how many
-       states change, how many stay put? Step through $n$ and use the $\phi(k)$ panel to decide which are
-       singlets and which triplets. Why are the triplet energies so boring?
-    3. **The matrix element $U/L$.** Show $\langle k\uparrow,-k\downarrow|H_C|k'\uparrow,-k'\downarrow\rangle=U/L$ on paper.
-       Then find it in `pair_hamiltonian`. What happens to the triplets if the interaction is not
-       on-site (task 7)?
-    4. **The correlation hole.** In Experiment 2, predict the ground-state $P(r)$ at $U=0$. Increase $U$:
-       how does the depth of the hole at $r=0$ depend on $U$? Why does it not go straight to zero?
-       Compare $U/t=2$, 10, 50, then switch on the log scale (U axis −10 to 50): how fast does $P(0)$
-       fall at large $U$?
-    5. **Energy versus wavefunction.** The ground-state energy changes only modestly with $U$, while
-       $P(0)$ changes a lot. Compare the blue line with the green dots and explain with the
-       Hellmann–Feynman theorem. What do the green dots tell you about the curvature of $E_0(U)$?
-    6. **Attraction.** Set $U<0$. What happens to the pair? Predict $P(0)$ as $U\to-\infty$.
-       Does the answer depend on $L$?
-    7. **Edit the physics.** Add a nearest-neighbour repulsion $V$ between the two electrons. In this basis
-       it gives $\langle k|H_V|k'\rangle=\frac{2V}{L}\cos(k-k')$; add in `pair_hamiltonian`
-       (before `return H`):
-       ```python
-       V = 1.0
-       for p in range(L):
-           for q in range(L):
-               H[p, q] += 2 * V / L * np.cos(k[p] - k[q])
-       ```
-       Predict first: do the triplet levels still stay flat as $U$ changes? Do they move compared with $V=0$?
-       Where does the ground-state $P(r)$ now peak?
-
-    **AI as a checking partner:** derive the $U/L$ matrix element yourself, then ask an AI assistant
-    to derive the nearest-neighbour matrix element of task 7. Check its answer against the
-    notebook: do the triplets move as you predicted?
-    """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -476,11 +506,6 @@ def _(mo):
     energies shift with $V$ (still independent of $U$). For large $U$ and $V$ the ground state pushes the
     ↓ electron to $|r|\ge2$.
     """)})
-    return
-
-
-@app.cell
-def _():
     return
 
 
